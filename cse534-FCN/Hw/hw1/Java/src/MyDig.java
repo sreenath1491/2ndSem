@@ -67,7 +67,7 @@ public class MyDig {
 			return;
 		}
 		
-		String results = myDig.run("www.google.com");
+		String results = myDig.run("www.facebook.com");
 		if(results == null){
 			System.out.println("ERROR");
 		}
@@ -191,3 +191,31 @@ public class MyDig {
 		}
 	}
 }
+
+
+
+/*
+ * 
+			    	records = resp.getSectionArray(Section.AUTHORITY);
+			    	Record[]  ans = resp.getSectionArray(Section.ANSWER);
+			    	if(ans.length > 0 && ans[0] instanceof CNAMERecord){
+			    		input = ((CNAMERecord) ans[0]).getAlias().toString();
+			    	}
+			    	else if(records[0] instanceof SOARecord){
+			    		break;
+			    	}
+			    	else
+			    		address = ((NSRecord) records[0]).getAdditionalName().toString();
+			    */
+
+
+/*
+ * old
+ 			    if(dots > 1){
+			    	records = resp.getSectionArray(Section.AUTHORITY);
+			    	if(records[0] instanceof SOARecord){
+			    		break;
+			    	}
+			    	address = ((NSRecord) records[0]).getAdditionalName().toString();
+			    }
+			 */

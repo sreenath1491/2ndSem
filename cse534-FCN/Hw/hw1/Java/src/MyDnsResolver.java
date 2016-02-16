@@ -56,7 +56,7 @@ public class MyDnsResolver {
 		MyDnsResolver myDnsResolver = new MyDnsResolver();
 		
 		
-		ArrayList<String> results = myDnsResolver.run("www.facebook.org");
+		ArrayList<String> results = myDnsResolver.run("www.facebook.com");
 		if(results.size() == 0){
 			System.out.println("ERROR: Could not obtain the ip address of input");
 		}
@@ -180,6 +180,7 @@ public class MyDnsResolver {
 			Message msg;
 			Message resp = null;
 			Record[] answer;
+			String root = address;
 			while(true){
 			    resolver = new SimpleResolver(address);
 			    name = Name.fromString(input);
@@ -198,6 +199,7 @@ public class MyDnsResolver {
 			    }
 			    else if(answer.length > 0 && answer[0] instanceof CNAMERecord){
 			    	input = ((CNAMERecord) answer[0]).getAlias().toString();
+			    	address = root;
 			    }
 			    else if(records[0] instanceof NSRecord)
 			    	address = ((NSRecord) records[0]).getAdditionalName().toString();
