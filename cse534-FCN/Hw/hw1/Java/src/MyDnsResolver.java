@@ -52,7 +52,7 @@ public class MyDnsResolver {
 			return;
 		}
 		MyDnsResolver myDnsResolver = new MyDnsResolver();
-		myDnsResolver.run("www.qq.com");
+		myDnsResolver.run(args[0]);
 	}
 	
 	public long run(String domain) {
@@ -89,7 +89,6 @@ public class MyDnsResolver {
 		catch(Exception e){
 			System.out.println("File root index update failed");
 		}
-		System.out.println(end-start);
 		return end-start;
 	}
 	
