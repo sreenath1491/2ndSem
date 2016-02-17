@@ -3,12 +3,10 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.xbill.DNS.ARecord;
-import org.xbill.DNS.Address;
 import org.xbill.DNS.CNAMERecord;
 import org.xbill.DNS.DClass;
 import org.xbill.DNS.Message;
@@ -54,9 +52,28 @@ public class MyDnsResolver {
 			return;
 		}
 		MyDnsResolver myDnsResolver = new MyDnsResolver();
-		
-		
-		ArrayList<String> results = myDnsResolver.run("www.facebook.com");
+		myDnsResolver.run("www.qq.com");
+	}
+	
+	public long run(String domain) {
+		long start = System.currentTimeMillis();
+		File f;
+		try{
+			f = new File(ROUND_ROBIN_FILE);
+			readFile(f);
+		}
+		catch(Exception e){
+			System.out.println("Error occurred while reading file");
+			return -1;
+		}
+
+		String input = domain;
+		if(!input.endsWith(".")){
+			input = input + ".";
+		}
+		Record[] records = queryAllRoots(input);
+		ArrayList<String> results = getResults(records);
+		long end = System.currentTimeMillis();
 		if(results.size() == 0){
 			System.out.println("ERROR: Could not obtain the ip address of input");
 		}
@@ -65,29 +82,6 @@ public class MyDnsResolver {
 				System.out.println(s.split("/")[1]);
 			}
 		}
-		
-		InetAddress addr = Address.getByName("www.facebook.com");
-		System.out.println(addr);
-	}
-	
-	private ArrayList<String> run(String domain) {
-		File f;
-		try{
-			f = new File(ROUND_ROBIN_FILE);
-			readFile(f);
-		}
-		catch(Exception e){
-			System.out.println("Error occurred while reading file");
-			return new ArrayList<String>();
-		}
-
-		String input = domain;
-		if(!input.endsWith(".")){
-			input = input + ".";
-		}
-		//int dots = input.length() - input.replace(".", "").length();
-		Record[] records = queryAllRoots(input);
-		ArrayList<String> results = getResults(records);
 
 		try{
 			updateFile(f);
@@ -95,33 +89,17 @@ public class MyDnsResolver {
 		catch(Exception e){
 			System.out.println("File root index update failed");
 		}
-		
-		return results;
+		System.out.println(end-start);
+		return end-start;
 	}
 	
 	private ArrayList<String> getResults(Record[] records ){
-		boolean cnameExits = false;
-		String input = null;
-		int dots = 0;
 		ArrayList<String> results = new ArrayList<>();
-		if(records != null){
+		if(records != null && records.length > 0){
 			for(Record rec : records){
 				if(rec instanceof ARecord)
 					results.add(((ARecord) rec).getAddress().toString());
-//				else{ //only 1 cname can exist
-//					input = ((CNAMERecord) rec).getAlias().toString();
-//					dots  = input.length() - input.replace(".", "").length();
-//					cnameExits = true;
-//				}
 			}
-//			if(!cnameExits){
-//				break;
-//			}
-//			else{
-//				rootsQueried = 0;
-//				records = queryAllRoots(input, dots);
-//				cnameExits = false;
-//			}
 		}
 		return results;
 	}
@@ -163,10 +141,7 @@ public class MyDnsResolver {
 			root = rootList.get(rootIndex);
 			records = getFinalAddress(root, input);
 			rootsQueried++;
-			//System.out.println("Query number: "+rootsQueried);			
-			//System.out.println("Query index: "+rootIndex);
 		}
-		
 		return records;
 	}
 	
@@ -179,9 +154,10 @@ public class MyDnsResolver {
 			Record query;
 			Message msg;
 			Message resp = null;
-			Record[] answer;
+			Record[] answer = null;
 			String root = address;
-			while(true){
+			boolean breakLoop = false;
+			while(!breakLoop){
 			    resolver = new SimpleResolver(address);
 			    name = Name.fromString(input);
 			    query = Record.newRecord(name, Type.A, DClass.IN);
@@ -195,7 +171,7 @@ public class MyDnsResolver {
 			    records = resp.getSectionArray(Section.AUTHORITY);
 			    answer = resp.getSectionArray(Section.ANSWER);
 			    if(answer.length > 0 && answer[0] instanceof ARecord){
-			    	break;
+			    	breakLoop = true;
 			    }
 			    else if(answer.length > 0 && answer[0] instanceof CNAMERecord){
 			    	input = ((CNAMERecord) answer[0]).getAlias().toString();
@@ -204,11 +180,10 @@ public class MyDnsResolver {
 			    else if(records[0] instanceof NSRecord)
 			    	address = ((NSRecord) records[0]).getAdditionalName().toString();
 			    else {
-			    	break;
+			    	breakLoop = true;
 			    }
 
 			}
-	    	//records = resp.getSectionArray(Section.ANSWER);
 	    	return answer;
 		}
 		catch(Exception e){
