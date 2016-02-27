@@ -65,7 +65,7 @@ public class PartA {
 	        	//Src port is the first 2 bytes of the tcp header
 	        	srcPort = extractPort(data, tcpHStart).trim();
 	        	
-	        	//Dest port is 2 bytes starting from the 3rd tcp header
+	        	//Dest port is 2 bytes starting from the 3rd byte of tcp header
 	        	destPort = extractPort(data, tcpHStart+2).trim();
 	        	
 	        	//flow map to track a tcp flow
@@ -74,8 +74,18 @@ public class PartA {
 	        		tcpFlowMap.put(flowKey, flowVal);
 	        		flowVal++;
 	        	}
+	        	// sequence number - 4 bytes starting from  5th byte of tcp header
+	        	long seqNo = extractSeqOrAckNo(data, tcpHStart+4);
+	        	// ackNo - 4 bytes starting from  9th byte of tcp header
+	        	long ackNo = extractSeqOrAckNo(data, tcpHStart+8);
+	        	// winsize
+	        	long winSize = extractWinSize(data, tcpHStart+14);
 	        	//get syn, ack, fin flags
-	        	//t seqNo, ackNo, winsize
+	        	boolean ack = ((data[tcpHStart+13] & 0x10) == 1);
+	        	boolean syn = ((data[tcpHStart+13] & 0x02) == 1);
+	        	boolean fin = ((data[tcpHStart+13] & 0x01) == 1);
+	        	
+	        	
 	        	
 	        	
 	        	//int first2 = ((data[0] & 0xF0) >> 4);
@@ -86,21 +96,35 @@ public class PartA {
 			pcap.close();
 		}
 	}
+	
+	private static long extractWinSize(byte[] data, int start){
+		byte[] winSizeBytes = extractBytes(data, start, 2);
+		String hexWinSize = convertByteToHex(winSizeBytes);
+		return Long.parseLong(hexWinSize, 16);
+	}
+	
+	private static long extractSeqOrAckNo(byte[] data, int start){
+		byte[] seqNoBytes = extractBytes(data, start, 4);
+		String hexSeqNo = convertByteToHex(seqNoBytes);
+		return Long.parseLong(hexSeqNo, 16);
+	}
+	
+	private static byte[] extractBytes(byte[] data, int start, int length){
+		byte[] result = new byte[length];
+		for(int i =0; i< length; i++){
+			result[i] = data[i+start];
+		}
+		return result;
+	}
 
 	private static String extractPort(byte[] data, int start) {
-		byte[] ipBytes = new byte[2];
-		ipBytes[0] = data[start++];
-		ipBytes[1] = data[start++];
+		byte[] ipBytes = extractBytes(data, start, 2);
 		String hexPort = convertByteToHex(ipBytes);
 		return String.valueOf(Integer.parseInt(hexPort, 16));
 	}
 	
 	private static String extractIp(byte[] data, int start) {
-		byte[] ipBytes = new byte[4];
-		ipBytes[0] = data[start++];
-		ipBytes[1] = data[start++];
-		ipBytes[2] = data[start++];
-		ipBytes[3] = data[start++];
+		byte[] ipBytes = extractBytes(data, start, 4);
 		String hexIp = convertByteToHex(ipBytes);
 		StringBuffer ip = new StringBuffer();
 		for(int i = 0; i < hexIp.length(); i = i+2 ){
