@@ -1,4 +1,6 @@
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.xml.bind.DatatypeConverter;
@@ -11,11 +13,16 @@ import org.jnetpcap.packet.PcapPacket;
 public class PartA {
 	
 	public static void main(String[] args) {
+		PartA partA = new PartA();
+		partA.run("../http_first_sample.pcap");
+	}
+	
+	public Map<FlowKey, List<Mydata>> run(String filename){
 		StringBuilder errbuf = new StringBuilder();
-		Pcap pcap = Pcap.openOffline("../http_first_sample.pcap",errbuf);
+		Pcap pcap = Pcap.openOffline(filename, errbuf);
 		if(pcap == null){
 			System.err.println(errbuf);
-			return;
+			return null;
 		}
 
 		JScanner.getThreadLocal().setFrameNumber(0);  
@@ -31,8 +38,8 @@ public class PartA {
         String destPort;
         int tcpHStart;
         FlowKey flowKey;
-        int flowVal = 0;
-        Map<FlowKey, Integer> tcpFlowMap = new HashMap<>(); 
+        List<Mydata> flowVal;
+        Map<FlowKey, List<Mydata>> tcpFlowMap = new HashMap<>(); 
         try{
 	        while(pcap.nextEx(packet) == Pcap.NEXT_EX_OK) { 
 	        	//extracting etherType from input. The 13th and 14th byte of packet represent the etherType
@@ -68,12 +75,7 @@ public class PartA {
 	        	//Dest port is 2 bytes starting from the 3rd byte of tcp header
 	        	destPort = extractPort(data, tcpHStart+2).trim();
 	        	
-	        	//flow map to track a tcp flow
-	        	flowKey = new FlowKey(srcIp , destIp, srcPort, destPort);
-	        	if(!tcpFlowMap.containsKey(flowKey)){
-	        		tcpFlowMap.put(flowKey, flowVal);
-	        		flowVal++;
-	        	}
+
 	        	// sequence number - 4 bytes starting from  5th byte of tcp header
 	        	long seqNo = extractSeqOrAckNo(data, tcpHStart+4);
 	        	// ackNo - 4 bytes starting from  9th byte of tcp header
@@ -81,35 +83,86 @@ public class PartA {
 	        	// winsize
 	        	long winSize = extractWinSize(data, tcpHStart+14);
 	        	//get syn, ack, fin flags
-	        	boolean ack = ((data[tcpHStart+13] & 0x10) == 1);
-	        	boolean syn = ((data[tcpHStart+13] & 0x02) == 1);
-	        	boolean fin = ((data[tcpHStart+13] & 0x01) == 1);
+	        	boolean ack = ((data[tcpHStart+13] & 0x10) == 0x10);
+	        	boolean syn = ((data[tcpHStart+13] & 0x02) == 0x02);
+	        	boolean fin = ((data[tcpHStart+13] & 0x01) == 0x01);
 	        	
-	        	
-	        	
-	        	
+	        	//flow map to track a tcp flow
+	        	flowKey = new FlowKey(srcIp , destIp, srcPort, destPort);
+	        	Mydata mydata = new Mydata(srcIp, destIp, srcPort, destPort, seqNo, ackNo, winSize, syn, ack, fin);
+	        	if(!tcpFlowMap.containsKey(flowKey) && syn && !ack){
+	        		flowVal = new ArrayList<>();
+	        		mydata.forward = true;
+	        		flowVal.add(mydata);
+	        		tcpFlowMap.put(flowKey, flowVal);
+	        	}
+	        	else if(tcpFlowMap.containsKey(flowKey)){
+	        		flowVal = tcpFlowMap.get(flowKey);
+	        		if(flowVal.get(0).srcIp.equals(mydata.srcIp)){
+	        			mydata.forward = true;
+	        		}
+	        		else{
+	        			mydata.forward = false;
+	        		}
+	        		flowVal.add(mydata);
+	        	}
 	        	//int first2 = ((data[0] & 0xF0) >> 4);
-	        	
-	        	
 	        }  
+	        printData(tcpFlowMap);
         }finally{
 			pcap.close();
 		}
+        return tcpFlowMap;
 	}
 	
-	private static long extractWinSize(byte[] data, int start){
+	private static void printData(Map<FlowKey, List<Mydata>> tcpFlowMap) {
+		System.out.println("Number of complete tcp flows:"+tcpFlowMap.size());
+		int i = 1;
+		for(Map.Entry<FlowKey, List<Mydata>> entry : tcpFlowMap.entrySet()){
+			List<Mydata> flowData = entry.getValue();
+			if(flowData != null && flowData.size() > 0 ){
+				System.out.println("FLOW "+i+":");
+				i++;
+				int forward = 0;
+				long relativeSeq = 0;
+				long relativeAck = 0;
+				for(int j = 0; j< flowData.size(); j++){
+					Mydata mydata = flowData.get(j);
+					if( j== 0){
+						relativeSeq = mydata.seqNo;
+					}
+					if(j == 1){
+						relativeAck = mydata.seqNo;
+					}
+					
+					if(mydata.forward){
+						System.out.println((j+1)+")"+mydata.toString(relativeSeq, relativeAck));
+						forward++;
+					}
+					else{
+						System.out.println((j+1)+")"+mydata.toString(relativeAck, relativeSeq));
+					}
+				}
+				int reverse = flowData.size()-forward;
+				System.out.println("Summary: Tcp forward/reverse/total packets: ["+forward+"/"+reverse+"/"+flowData.size()+"]");
+			}
+		}
+		
+	}
+
+	private long extractWinSize(byte[] data, int start){
 		byte[] winSizeBytes = extractBytes(data, start, 2);
 		String hexWinSize = convertByteToHex(winSizeBytes);
 		return Long.parseLong(hexWinSize, 16);
 	}
 	
-	private static long extractSeqOrAckNo(byte[] data, int start){
+	private long extractSeqOrAckNo(byte[] data, int start){
 		byte[] seqNoBytes = extractBytes(data, start, 4);
 		String hexSeqNo = convertByteToHex(seqNoBytes);
 		return Long.parseLong(hexSeqNo, 16);
 	}
 	
-	private static byte[] extractBytes(byte[] data, int start, int length){
+	private byte[] extractBytes(byte[] data, int start, int length){
 		byte[] result = new byte[length];
 		for(int i =0; i< length; i++){
 			result[i] = data[i+start];
@@ -117,13 +170,13 @@ public class PartA {
 		return result;
 	}
 
-	private static String extractPort(byte[] data, int start) {
+	private String extractPort(byte[] data, int start) {
 		byte[] ipBytes = extractBytes(data, start, 2);
 		String hexPort = convertByteToHex(ipBytes);
 		return String.valueOf(Integer.parseInt(hexPort, 16));
 	}
 	
-	private static String extractIp(byte[] data, int start) {
+	private String extractIp(byte[] data, int start) {
 		byte[] ipBytes = extractBytes(data, start, 4);
 		String hexIp = convertByteToHex(ipBytes);
 		StringBuffer ip = new StringBuffer();
@@ -134,7 +187,7 @@ public class PartA {
 		return ip.substring(0, ip.length()-1).toString();
 	}
 
-	private static boolean isTcp(byte[] input){
+	private boolean isTcp(byte[] input){
 		byte[] protocol = new byte[1];
 		// extracting protocol from input. Protocol is stored in the 10th byte of an IP packet
 		protocol[0] = input[9];
@@ -146,7 +199,7 @@ public class PartA {
 	}
 	
 	
-	private static boolean isIp(byte[] input){
+	private boolean isIp(byte[] input){
 		// etherType should be 0x0800 in our case
 		if("0800".equals(convertByteToHex(input))){
 			return true;
@@ -154,12 +207,13 @@ public class PartA {
 		return false;
 	}
 	
-	private static String convertByteToHex(byte[] byteData){
-		return DatatypeConverter.printHexBinary(byteData);
+	private String convertByteToHex(byte[] byteData){
+		String val = DatatypeConverter.printHexBinary(byteData);
+		return val;
 	}
 	
 	
-	static class FlowKey{
+	class FlowKey{
 		public String srcIp;
 		public String destIp;
 		public String srcPort;
@@ -200,6 +254,61 @@ public class PartA {
 	        }
 	        return true;
 	    }
+	    
+	    public String toString(){
+	    	return srcIp+"."+srcPort+"-->"+destIp+"."+destPort;
+	    }
+	}
+	
+	class Mydata{
+		String srcIp;
+		String destIp;
+		String srcPort;
+		String destPort;
+		long seqNo;
+		long ackNo;
+		long winSize;
+		boolean syn;
+		boolean ack;
+		boolean fin;
+		boolean forward;
+		
+		public Mydata(String srcIp, String destIp, String srcPort, String destPort, long seqNo, long ackNo, long winSize, boolean syn, boolean ack, boolean fin){
+			this.srcIp = srcIp;
+			this.destIp = destIp;
+			this.srcPort = srcPort;
+			this.destPort = destPort;
+			this.seqNo = seqNo;
+			this.ackNo = ackNo;
+			this.winSize = winSize;
+			this.syn = syn;
+			this.ack = ack;
+			this.fin = fin;
+		}
+		
+		public String toString(long relativeSeq, long relativeAck){
+			StringBuffer sb  = new StringBuffer();
+			sb.append(srcIp);
+			sb.append(":");
+			sb.append(srcPort);
+			sb.append("-->");
+			sb.append(destIp);
+			sb.append(":");
+			sb.append(destPort);
+			sb.append("###");
+			sb.append(". Sequence No: "+(seqNo-relativeSeq));
+			sb.append(". Ack No: "+(ackNo-relativeAck));
+			sb.append(". Window Size: "+winSize);
+			sb.append(". Flags: ");
+			if(syn)
+				sb.append("SYN ");
+			if(ack)
+				sb.append(" ACK");
+			if(fin)
+				sb.append(" FIN");
+			
+			return sb.toString();
+		}
 	}
 
 }

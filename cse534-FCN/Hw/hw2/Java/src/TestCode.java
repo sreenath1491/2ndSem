@@ -1,12 +1,11 @@
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.jnetpcap.Pcap;
 import org.jnetpcap.nio.JMemory;
 import org.jnetpcap.packet.JFlow;
 import org.jnetpcap.packet.JFlowKey;
-import org.jnetpcap.packet.JPacket;
+import org.jnetpcap.packet.JFlowMap;
 import org.jnetpcap.packet.JScanner;
 import org.jnetpcap.packet.PcapPacket;
 import org.jnetpcap.protocol.tcpip.Tcp;
@@ -24,11 +23,11 @@ public class TestCode {
         final Tcp tcp = new Tcp(); 
         final PcapPacket packet = new PcapPacket(JMemory.POINTER);  
         final Map<JFlowKey, JFlow> flows = new HashMap<JFlowKey, JFlow>();  
-//        JFlowMap map = new JFlowMap();  
-//        
-//        pcap.loop(Pcap.LOOP_INFINITE, map, null);  
-//  
-//        System.out.println(map.toString());
+        JFlowMap map = new JFlowMap();  
+        
+        pcap.loop(Pcap.LOOP_INFINITE, map, null);  
+  
+        System.out.println(map.toString());
 /*
         while(pcap.nextEx(packet) == 1) {  
             final JFlowKey key = packet.getState().getFlowKey();  
@@ -63,12 +62,12 @@ public class TestCode {
             }  
             System.out.println();  
         } */
-        String a = "123";
-        String b = new String("123");
-        System.err.println(a.hashCode());
-        System.err.println(b.hashCode());
-        System.err.println(a==b);
-        System.err.println(a.equals(b));
+//        String a = "123";
+//        String b = new String("123");
+//        System.err.println(a.hashCode());
+//        System.err.println(b.hashCode());
+//        System.err.println(a==b);
+//        System.err.println(a.equals(b));
         
         
         
