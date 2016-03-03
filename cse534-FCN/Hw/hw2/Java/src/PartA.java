@@ -11,10 +11,19 @@ import org.jnetpcap.packet.JScanner;
 import org.jnetpcap.packet.PcapPacket;
 
 public class PartA {
+	public static final int PART_A = 0;
+	public static final int PART_B = 1;
+	public static final int PART_C = 2;
+	public int part; 
+	
+	public PartA(int part) {
+		this.part = part;
+	}
 	
 	public static void main(String[] args) {
-		PartA partA = new PartA();
-		partA.run("../http_first_sample.pcap");
+		PartA partA = new PartA(PART_A);
+		Map<FlowKey, List<Mydata>> tcpFlowMap = partA.run("../http_first_sample.pcap");
+		partA.printData(tcpFlowMap);
 	}
 	
 	public Map<FlowKey, List<Mydata>> run(String filename){
@@ -90,13 +99,21 @@ public class PartA {
 	        	//flow map to track a tcp flow
 	        	flowKey = new FlowKey(srcIp , destIp, srcPort, destPort);
 	        	Mydata mydata = new Mydata(srcIp, destIp, srcPort, destPort, seqNo, ackNo, winSize, syn, ack, fin);
+	    		//data bytes is 2 bytes starting from 2nd byte of the packet
+	    		byte[] dataBytes = extractBytes(data, 2, 2);
+	    		int dataLen = Integer.parseInt(convertByteToHex(dataBytes), 16);
+	    		//adding 14 for ethernet headers
+	    		mydata.dataLen = dataLen + 14;
+	        	if(part == PART_B){
+	        		doPartB(data, tcpHStart, mydata);
+	        	}
 	        	if(!tcpFlowMap.containsKey(flowKey) && syn && !ack){
 	        		flowVal = new ArrayList<>();
 	        		mydata.forward = true;
 	        		flowVal.add(mydata);
 	        		tcpFlowMap.put(flowKey, flowVal);
 	        	}
-	        	else if(tcpFlowMap.containsKey(flowKey)){
+	        	else if(tcpFlowMap.containsKey(flowKey) && ack){
 	        		flowVal = tcpFlowMap.get(flowKey);
 	        		if(flowVal.get(0).srcIp.equals(mydata.srcIp)){
 	        			mydata.forward = true;
@@ -106,16 +123,109 @@ public class PartA {
 	        		}
 	        		flowVal.add(mydata);
 	        	}
-	        	//int first2 = ((data[0] & 0xF0) >> 4);
 	        }  
-	        printData(tcpFlowMap);
         }finally{
 			pcap.close();
 		}
         return tcpFlowMap;
 	}
 	
-	private static void printData(Map<FlowKey, List<Mydata>> tcpFlowMap) {
+	private void extractHttp(byte[] data, int tcpHStart, Mydata mydata){
+		if(tcpHStart + 12 > data.length){
+			return;
+		}
+		//getting data offset to find how many bytes of data is in options
+		int dataOffset = (data[tcpHStart + 12] & 0xf0) >> 4;
+		//int optionsLength = (dataOffset-5)*4;
+		byte[] bytes = extractBytes(data, tcpHStart+(dataOffset*4), data.length-(tcpHStart+(dataOffset*4)));
+		String s = convertByteToHex(bytes);
+		StringBuilder out = new StringBuilder(s.length() / 2);
+		for (int i = 0; i < s.length(); i+=2) {
+		    String myHex = "" + s.charAt(i) + s.charAt(i+1);
+		    int intVal = Integer.parseInt(myHex, 16);
+		    if(!((char) intVal == '#'))
+		    	out.append((char) intVal);
+		}
+		String string = out.toString();
+		if(string!= null && string != "" && string.contains("GET")|| string.contains("200 OK")){
+			mydata.httpData = string;
+		}
+	}
+	
+	//do part related to partB.
+	//extract number of data bytes for throughput calculation
+	//Extract time stamp values options field
+	private void doPartB(byte[] data, int tcpHStart, Mydata mydata) {
+		//getting data offset to find how many bytes of data is in options
+		int dataOffset = (data[tcpHStart + 12] & 0xf0) >> 4;
+		int optionsLength = (dataOffset-5)*4;
+		extractHttp(data, tcpHStart, mydata);
+
+		//iterate over options and get needed values
+		//mss has kind 02 and timestamp has kind 08
+		int i = tcpHStart + 20;
+		while(i < optionsLength+tcpHStart+20){
+			int kind = data[i] & 0xff;
+			if(kind == 0){
+				//signals end of options
+				i++;
+				break;
+			}
+			else if(kind == 1){
+				//not needed
+				i++;
+			}
+			else if(kind == 2){
+				//MSS value
+				i++;
+				//length of the field
+				int length = (data[i] & 0xff) - 2;
+				i++;
+				byte[] mssBytes = extractBytes(data, i, length);
+				long mssVal = Long.parseLong(convertByteToHex(mssBytes), 16);
+				mydata.mss = mssVal;
+				i += length;
+			}
+			else if(kind == 3){
+				//not needed
+				i++;
+				//length of the field
+				int length = (data[i] & 0xff) - 2;
+				i++;// for length data field
+				i += length;
+			}
+			else if(kind == 4){
+				//not needed
+				i++;
+				//length of the field
+				int length = (data[i] & 0xff) - 2;
+				i++;// for length data field
+				i += length;
+			}
+			else if(kind == 5){
+				//not needed
+				i++;
+				//length of the field
+				int length = (data[i] & 0xff) - 2;
+				i++;// for length data field
+				i += length;
+			}
+			else if(kind == 8){
+				//not needed
+				i++;
+				//length of the field
+				int length = (data[i] & 0xff) - 2;
+				i++;
+				//extract only tsVal
+				byte[] timeBytes = extractBytes(data, i, length/2);
+				long tsVal = Long.parseLong(convertByteToHex(timeBytes), 16);
+				mydata.tsVal = tsVal;
+				i += length;
+			}
+		}
+	}
+
+	public void printData(Map<FlowKey, List<Mydata>> tcpFlowMap) {
 		System.out.println("Number of complete tcp flows:"+tcpFlowMap.size());
 		int i = 1;
 		for(Map.Entry<FlowKey, List<Mydata>> entry : tcpFlowMap.entrySet()){
@@ -136,18 +246,17 @@ public class PartA {
 					}
 					
 					if(mydata.forward){
-						System.out.println((j+1)+")"+mydata.toString(relativeSeq, relativeAck));
+						System.out.println(mydata.toString(relativeSeq, relativeAck));
 						forward++;
 					}
 					else{
-						System.out.println((j+1)+")"+mydata.toString(relativeAck, relativeSeq));
+						System.out.println(mydata.toString(relativeAck, relativeSeq));
 					}
 				}
 				int reverse = flowData.size()-forward;
 				System.out.println("Summary: Tcp forward/reverse/total packets: ["+forward+"/"+reverse+"/"+flowData.size()+"]");
 			}
 		}
-		
 	}
 
 	private long extractWinSize(byte[] data, int start){
@@ -272,8 +381,13 @@ public class PartA {
 		boolean ack;
 		boolean fin;
 		boolean forward;
+		long mss;
+		long tsVal;
+		int dataLen;
+		String httpData;
 		
-		public Mydata(String srcIp, String destIp, String srcPort, String destPort, long seqNo, long ackNo, long winSize, boolean syn, boolean ack, boolean fin){
+		public Mydata(String srcIp, String destIp, String srcPort, String destPort, long seqNo, long ackNo, long winSize, boolean syn, 
+				boolean ack, boolean fin){
 			this.srcIp = srcIp;
 			this.destIp = destIp;
 			this.srcPort = srcPort;
@@ -284,6 +398,7 @@ public class PartA {
 			this.syn = syn;
 			this.ack = ack;
 			this.fin = fin;
+			httpData = null;
 		}
 		
 		public String toString(long relativeSeq, long relativeAck){
@@ -295,17 +410,45 @@ public class PartA {
 			sb.append(destIp);
 			sb.append(":");
 			sb.append(destPort);
-			sb.append("###");
-			sb.append(". Sequence No: "+(seqNo-relativeSeq));
+			sb.append(". Seq No: "+(seqNo-relativeSeq));
 			sb.append(". Ack No: "+(ackNo-relativeAck));
-			sb.append(". Window Size: "+winSize);
-			sb.append(". Flags: ");
+			sb.append(". Win Size: "+winSize);
+			sb.append(". Packet Size: "+dataLen);
+			//sb.append(". Flags: ");
 			if(syn)
-				sb.append("SYN ");
+				sb.append(". SYN ");
 			if(ack)
 				sb.append(" ACK");
 			if(fin)
 				sb.append(" FIN");
+			if(httpData != null){
+				sb.append("\nHTTP DATA: ");
+				sb.append(httpData);
+			}
+			
+			return sb.toString();
+		}
+		
+		public String toStringPartB(long relativeSeq, long relativeAck){
+			StringBuffer sb  = new StringBuffer();
+			sb.append(srcIp);
+			sb.append(":");
+			sb.append(srcPort);
+			sb.append("-->");
+			sb.append(destIp);
+			sb.append(":");
+			sb.append(destPort);
+			if(syn)
+				sb.append(". SYN ");
+			if(ack)
+				sb.append(" ACK");
+			if(fin)
+				sb.append(" FIN");
+			if(httpData != null){
+				sb.append("\nHTTP DATA START:\n");
+				sb.append(httpData.trim());
+				sb.append("\nHTTP DATA END:");
+			}
 			
 			return sb.toString();
 		}
