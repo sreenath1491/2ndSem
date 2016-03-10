@@ -8,8 +8,23 @@ public class PartB extends PartA{
 	}
 
 	public static void main(String[] args) {
+		if(args.length < 1){
+			System.out.println("Please provide argument 1 for HTTP_SampleA.pcap or 2 for HTTP_SampleB.pcap");
+			return;
+		}
 		PartB partB = new PartB(PART_B);
-		Map<FlowKey, List<Mydata>> tcpFlowMap = partB.run("../HTTP_SampleB.pcap");
+		String fileName = null;
+		if(args[0].equals("1")){
+			fileName ="./HTTP_SampleA.pcap";
+		}
+		else if(args[0].equals("2")){
+			fileName ="./HTTP_SampleB.pcap";
+		}
+		else{
+			System.out.println("Please enter argument 1 for HTTP_SampleA.pcap or 2 for HTTP_SampleB.pcap");
+			return;
+		}
+		Map<FlowKey, List<Mydata>> tcpFlowMap = partB.run(fileName);
 		partB.printData(tcpFlowMap);
 		System.out.println("ANALYSIS:-----------------------------------------");
 		partB.runAnalysis(tcpFlowMap);

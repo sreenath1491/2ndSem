@@ -22,7 +22,7 @@ public class PartA {
 	
 	public static void main(String[] args) {
 		PartA partA = new PartA(PART_A);
-		Map<FlowKey, List<Mydata>> tcpFlowMap = partA.run("../http_first_sample.pcap");
+		Map<FlowKey, List<Mydata>> tcpFlowMap = partA.run("./http_first_sample.pcap");
 		partA.printData(tcpFlowMap);
 	}
 	
@@ -106,6 +106,9 @@ public class PartA {
 	    		mydata.dataLen = dataLen + 14;
 	        	if(part == PART_B){
 	        		doPartB(data, tcpHStart, mydata);
+	        	}
+	        	else{
+	        		extractHttp(data, tcpHStart, mydata);
 	        	}
 	        	if(!tcpFlowMap.containsKey(flowKey) && syn && !ack){
 	        		flowVal = new ArrayList<>();
@@ -414,16 +417,17 @@ public class PartA {
 			sb.append(". Ack No: "+(ackNo-relativeAck));
 			sb.append(". Win Size: "+winSize);
 			sb.append(". Packet Size: "+dataLen);
-			//sb.append(". Flags: ");
+			sb.append(".");
 			if(syn)
-				sb.append(". SYN ");
+				sb.append(" SYN ");
 			if(ack)
 				sb.append(" ACK");
 			if(fin)
 				sb.append(" FIN");
 			if(httpData != null){
-				sb.append("\nHTTP DATA: ");
+				sb.append("\nHTTP DATA START:\n");
 				sb.append(httpData);
+				sb.append("\nHTTP DATA END:");
 			}
 			
 			return sb.toString();
@@ -438,8 +442,9 @@ public class PartA {
 			sb.append(destIp);
 			sb.append(":");
 			sb.append(destPort);
+			sb.append(".");
 			if(syn)
-				sb.append(". SYN ");
+				sb.append(" SYN ");
 			if(ack)
 				sb.append(" ACK");
 			if(fin)

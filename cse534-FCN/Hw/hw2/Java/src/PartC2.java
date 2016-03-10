@@ -1,18 +1,16 @@
 import java.util.List;
 import java.util.Map;
 
-public class PartC extends PartA {
+public class PartC2 extends PartA {
 
-	public PartC(int part) {
+	public PartC2(int part) {
 		super(part);
-		// TODO Auto-generated constructor stub
 	}
 	
 	public static void main(String[] args) {
-		PartC partC = new PartC(PART_B);
-		Map<FlowKey, List<Mydata>> tcpFlowMap = partC.run("../HTTP_Sample_Big_Packet.pcap");
+		PartC2 partC = new PartC2(PART_B);
+		Map<FlowKey, List<Mydata>> tcpFlowMap = partC.run("./HTTP_Sample_Big_Packet.pcap");
 		partC.runAnalysis(tcpFlowMap);
-		
 	}
 	
 	public void runAnalysis(Map<FlowKey, List<Mydata>> tcpFlowMap){
